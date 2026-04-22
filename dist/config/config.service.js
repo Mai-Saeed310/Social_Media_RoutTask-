@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CLIENT_ID = exports.REFRESH_SECRET_KEY = exports.ACCESS_SECRET_KEY = exports.PREFIX = exports.REDIS_URL = exports.PASSWORD = exports.EMAIL = exports.SALT_ROUNDS = exports.DB_URI = exports.PORT = void 0;
+const path_1 = require("path");
+const dotenv_1 = require("dotenv");
+const NODE_ENV = process.env.NODE_ENV;
+(0, dotenv_1.config)({ path: (0, path_1.resolve)(__dirname, `../../.env.${NODE_ENV}`) });
+exports.PORT = Number(process.env.PORT) || 3000;
+exports.DB_URI = process.env.DB_URI;
+exports.SALT_ROUNDS = Number(process.env.SALT_ROUNDS);
+exports.EMAIL = process.env.EMAIL;
+exports.PASSWORD = process.env.PASSWORD;
+exports.REDIS_URL = process.env.REDIS_URL;
+exports.PREFIX = process.env.PREFIX;
+exports.ACCESS_SECRET_KEY = process.env.ACCESS_SECRET_KEY;
+exports.REFRESH_SECRET_KEY = process.env.REFRESH_SECRET_KEY;
+exports.CLIENT_ID = process.env.CLIENT_ID;
