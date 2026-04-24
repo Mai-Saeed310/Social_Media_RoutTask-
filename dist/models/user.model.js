@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.userModel = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_enum_1 = require("../common/enum/user.enum");
+const hash_security_1 = require("../common/utiliti/security/hash.security");
 const userSchema = new mongoose_1.default.Schema({
     firstName: {
         type: String,
@@ -29,14 +30,18 @@ const userSchema = new mongoose_1.default.Schema({
     },
     password: {
         type: String,
-        required: false,
+        required: function () {
+            return this.provider == user_enum_1.providerEnum.Google ? false : true;
+        },
         trim: true,
         min: 3,
         max: 25
     },
     age: {
         type: Number,
-        required: true,
+        required: function () {
+            return this.provider == user_enum_1.providerEnum.Google ? false : true;
+        },
         trim: true,
         min: 18,
         max: 60
@@ -79,5 +84,10 @@ userSchema.virtual("userName")
     .set(function (v) {
     const [firstName, lastName] = v.split(" ");
     this.set({ firstName, lastName });
+});
+userSchema.pre("save", function () {
+    if (this.isModified("password") && this.password) {
+        this.password = (0, hash_security_1.Hash)({ plainText: this.password });
+    }
 });
 exports.userModel = mongoose_1.default.model("userModel", userSchema);

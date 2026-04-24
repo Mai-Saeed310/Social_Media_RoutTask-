@@ -1,20 +1,27 @@
 import { NextFunction, Request, Response } from "express";
 import { AppError } from "../utiliti/global-error-handling";
-import { ACCESS_SECRET_KEY, PREFIX } from "../../config/config.service";
-import { VerifyToken } from "./token";
 import { IUser, userModel } from "../../models/user.model";
-import { get, revoke_key } from "../../redis/radis.service";
 import { HydratedDocument } from "mongoose";
 import { JwtPayload } from "jsonwebtoken";
+import tokenService from "../../common/middlware/token";
+import radisService from "../../common/service/radis.service";
+import { ACCESS_SECRET_KEY_ADMIN, ACCESS_SECRET_KEY_USER, PREFIX_ADMIN, PREFIX_USER } from "../../config/config.service";
+
 
 export interface IRequest extends Request {
   user?: HydratedDocument<IUser>;
   decoded?: JwtPayload;
 }
 
+// declare module "express-serve-static-core" {
+//   interface Request {
+//     user: HydratedDocument<IUser>,
+//     decoded: HydratedDocument<IUser>
+//   }
+// }
 
 export const authentication = async (req: IRequest, res: Response, next: NextFunction)  => {
-    
+
     const {authorization} = req.headers;
 
     if (!authorization){
@@ -22,11 +29,20 @@ export const authentication = async (req: IRequest, res: Response, next: NextFun
     }
     const [prefix, token] = authorization.split(" ");
 
-    if (prefix !== PREFIX){
-        throw new AppError("inValid prefix", 400);
+    let ACCESS_SECRET_KEY = "" ; 
+
+    if(prefix == PREFIX_USER){
+        ACCESS_SECRET_KEY = ACCESS_SECRET_KEY_USER
     }
-   
-    const decoded = VerifyToken({token: token as string, secret_key: ACCESS_SECRET_KEY} ) as { id: string; jti: string; iat: number }
+
+    else if(prefix == PREFIX_ADMIN){
+        ACCESS_SECRET_KEY = ACCESS_SECRET_KEY_ADMIN
+
+    }else{
+        throw new AppError("invalid prefix", 401);
+    }
+
+    const decoded = tokenService.VerifyToken({token: token as string, secret_key: ACCESS_SECRET_KEY} ) as { id: string; jti: string; iat: number }
 
     if (!decoded || !decoded?.id) {
         throw new AppError("invalid token", 401);
@@ -36,6 +52,10 @@ export const authentication = async (req: IRequest, res: Response, next: NextFun
     const user = await userModel.findById(decoded.id)
     if (!user) {
         throw new AppError("user not exist",400 );
+    }
+
+  if (!user?.confirmed) {
+          throw new AppError("user not confirmed yet");
     }
 
     // to handle logout all devices
@@ -48,7 +68,7 @@ export const authentication = async (req: IRequest, res: Response, next: NextFun
         // filter: { tokenId: decoded.jti } 
         // });
 
-        const revokeToken = await get(revoke_key({ userId: user._id, jti: decoded.jti }) );
+        const revokeToken = await radisService.get(radisService.revoke_key({ userId: user._id, jti: decoded.jti }) );
 
         if (revokeToken) {
              throw new AppError("Token revoked. Please login again.");

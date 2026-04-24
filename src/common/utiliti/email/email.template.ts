@@ -60,7 +60,7 @@ export const emailTemplate =(otp:number)=>{
           <!-- Footer -->
           <tr>
             <td style="background-color:#f9f9f9; padding:15px; text-align:center; font-size:12px; color:#aaa;">
-              © 2026 Saraha App. All rights reserved.
+              © 2026 Social Media App. All rights reserved.
             </td>
           </tr>
 

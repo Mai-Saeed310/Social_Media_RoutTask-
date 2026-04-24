@@ -19,9 +19,15 @@ export const PASSWORD: string = process.env.PASSWORD!
 
 export const REDIS_URL: string = process.env.REDIS_URL!
 
-export const PREFIX: string = process.env.PREFIX!
+export const PREFIX_ADMIN: string = process.env.PREFIX_ADMIN!
+export const PREFIX_USER: string = process.env.PREFIX_USER!
 
-export const ACCESS_SECRET_KEY: string = process.env.ACCESS_SECRET_KEY!
-export const REFRESH_SECRET_KEY: string = process.env.REFRESH_SECRET_KEY!
+
+export const ACCESS_SECRET_KEY_USER: string = process.env.ACCESS_SECRET_KEY_USER!
+export const REFRESH_SECRET_KEY_USER: string = process.env.REFRESH_SECRET_KEY_USER!
+
+export const ACCESS_SECRET_KEY_ADMIN: string = process.env.ACCESS_SECRET_KEY_ADMIN!
+export const REFRESH_SECRET_KEY_ADMIN: string = process.env.REFRESH_SECRET_KEY_ADMIN!
 
 export const CLIENT_ID: string = process.env.CLIENT_ID!
+

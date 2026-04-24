@@ -1,5 +1,6 @@
 import mongoose, { Types } from "mongoose";
 import { GenderEnum, providerEnum, RoleEnum } from "../common/enum/user.enum";
+import { Hash } from "../common/utiliti/security/hash.security";
 
 
 
@@ -46,14 +47,18 @@ const userSchema = new mongoose.Schema<IUser>({
 
     password: {
     type: String,
-    required: false,
+    required: function () : boolean{
+        return this.provider == providerEnum.Google ? false : true
+    },   
     trim: true,
     min: 3,
     max: 25
     },
     age: {
         type: Number,
-        required: true,
+        required: function () : boolean{
+        return this.provider == providerEnum.Google ? false : true
+     },   
         trim: true,
         min: 18,
         max: 60
@@ -96,10 +101,25 @@ userSchema.virtual("userName")
     .get(function () {
         return this.firstName + " " + this.lastName
     })
-    .set(function (v) {
+    .set(function (v: string) {
         const [firstName, lastName] = v.split(" ")
         this.set({ firstName, lastName })
     })
 
+
+
+// hooks
+userSchema.pre("save", function () {
+
+  // hash password
+  if (this.isModified("password") && this.password) {
+    this.password = Hash({ plainText: this.password });
+  }
+
+});
+
+
+
 // create model
 export const userModel = mongoose.model<IUser>("userModel", userSchema);
+
