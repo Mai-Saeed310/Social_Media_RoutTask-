@@ -1,26 +1,32 @@
+import { RoleEnum } from './../../common/enum/user.enum';
 import { NextFunction, Request, Response } from "express";
 import { IUser } from "../../models/user.model";
-import { HydratedDocument, Model } from "mongoose";
-import { signUpType } from "./user.validation";
+import { HydratedDocument } from "mongoose";
+import { confirmEmailType, resendOtpSchemaType, signInSchemaType, signUpType } from "./user.validation";
 import { AppError } from "../../common/utiliti/global-error-handling";
 import { UserRepository } from "../../DB/Repository/user.repository";
-import { encrypt } from "../../common/utiliti/security/encrypt.security";
+import { decrypt, encrypt } from "../../common/utiliti/security/encrypt.security";
 import { Compare, Hash } from "../../common/utiliti/security/hash.security";
 import { generateOtp, sendEmail } from "../../common/utiliti/email/send.email";
 import { emailTemplate } from "../../common/utiliti/email/email.template";
-import { block_login_key, deleteKey, expire, get, get_key, incr, keys, login_attempts_key, max_otp_key, otp_key, revoke_key, setValue, ttl } from "../../redis/radis.service";
 import { randomUUID } from "node:crypto";
-import { GenerateToken } from "../../common/middlware/token";
-import { ACCESS_SECRET_KEY, CLIENT_ID, REFRESH_SECRET_KEY } from "../../config/config.service";
+import {  ACCESS_SECRET_KEY_ADMIN, ACCESS_SECRET_KEY_USER, CLIENT_ID, REFRESH_SECRET_KEY_ADMIN, REFRESH_SECRET_KEY_USER } from "../../config/config.service";
 import { providerEnum } from "../../common/enum/user.enum";
 import { redisClient } from "../../DB/redis.service";
 import { IRequest } from "../../common/middlware/authentication";
-import {OAuth2Client} from 'google-auth-library';
+import {OAuth2Client, TokenPayload} from 'google-auth-library';
+import { eventEmitter } from "../../common/utiliti/email/email.events";
+import { EventEnum } from "../../common/enum/event.enum";
+import radisService from "../../common/service/radis.service";
+import tokenService from "../../common/middlware/token";
 
 
 
 class UserService {
     private readonly _userModel = new UserRepository();
+    private readonly _radisService =  radisService;
+    private readonly _tokenService = tokenService;
+
 
     constructor(){}
      signUp =  async (req: Request, res: Response, next: NextFunction)  => {
@@ -33,7 +39,7 @@ class UserService {
         const user: HydratedDocument<IUser>= await this._userModel.create({ 
            userName,
            email, 
-           password: Hash({plainText: password}),
+           password: password,
            age, 
            gender, 
            address, 
@@ -41,47 +47,48 @@ class UserService {
           } as Partial<IUser>);
 
          const otp = await generateOtp(); 
+         eventEmitter.emit(EventEnum.confirmEmail, async()=>{
+            await sendEmail({to: email, subject: "Email confirmation", html: emailTemplate(otp)})
+            await this._radisService.setValue({key:this._radisService.otp_key({email: email, subject: EventEnum.confirmEmail}) , value : Hash({ plainText: `${otp}` }) , ttl :60 * 2 })
+            await this._radisService.setValue({key:this._radisService.max_otp_key(email) , value : 1 , ttl :60 * 10 })
+        })
+        
 
-         await sendEmail({to: email, subject: "Email confirmation", html: emailTemplate(otp)})
-
-         await setValue({key:otp_key({email: email, subject: "Email confirmation"}) , value : Hash({ plainText: `${otp}` }) , ttl :60 * 2 })
-         await setValue({key:max_otp_key(email) , value : Hash({ plainText: `${otp}` }) , ttl :60 * 2 })
-
-        res.status(200).json({message: "done", data: user})
+        res.status(201).json({message: "done", data: user})
       };
 
      signIn =  async (req: Request, res: Response, next: NextFunction) => {
 
-      const {email, password} = req.body; 
+      const {email, password}: signInSchemaType = req.body; 
       const user = await this._userModel.findOne({filter: {email,confirmed: { $exists: true }, provider: providerEnum.System} } )
       if(!user){
             throw new AppError("User does not found", 404)
       }
 
       // check if user is blocked
-      const isBlocked = await ttl(block_login_key(email ));
+      const isBlocked = await this._radisService.ttl(this._radisService.block_login_key(email ));
       if (isBlocked > 0) {
             throw new AppError(`Your account is blocked, try again after ${isBlocked} seconds`, 400 );
       } 
       
       if (!Compare({ plainText: password, cipherText: user.password })) {
-            const attempts_key = login_attempts_key(email)
+            const attempts_key = this._radisService.login_attempts_key(email)
 
             // increase attempts
-            const attempts = await incr(attempts_key);
+            const attempts = await this._radisService.incr(attempts_key);
 
             // ttl for the attempts 
-            await expire({ key: attempts_key, ttl: 60*10 });
+            await this._radisService.expire({ key: attempts_key, ttl: 60*10 });
 
             // block after 5 tries
             if (attempts >= 5) {
-                  await setValue({
-                  key: block_login_key( email ),
+                  await this._radisService.setValue({
+                  key: this._radisService.block_login_key( email ),
                   value: 1,
                   ttl: 60 * 5 // 5 minutes
                   });
 
-                  await deleteKey(login_attempts_key(email ));
+                  await this._radisService.deleteKey(this._radisService.login_attempts_key(email ));
                   throw new AppError("Account blocked for 5 minutes",  400 );
             }
 
@@ -89,24 +96,24 @@ class UserService {
       }
       
     // reset attempts after success
-    await deleteKey(login_attempts_key(email ));
+    await this._radisService.deleteKey(this._radisService.login_attempts_key(email ));
 
       // to generate random token Id 
       const jwtId = randomUUID();
 
       // 3. generate tokens
-      const access_token = GenerateToken({
+      const access_token = this._tokenService.GenerateToken({
       payload: { id: user._id},
-      secret_key: ACCESS_SECRET_KEY,
+      secret_key: user?.role == RoleEnum.user ? ACCESS_SECRET_KEY_USER : ACCESS_SECRET_KEY_ADMIN,
       options : {
             expiresIn: "1h",
             jwtid: jwtId
       }
       }); 
 
-      const refresh_token = GenerateToken({
+      const refresh_token = this._tokenService.GenerateToken({
       payload: { id: user._id},
-      secret_key: REFRESH_SECRET_KEY,
+      secret_key: user?.role == RoleEnum.user ? REFRESH_SECRET_KEY_USER : REFRESH_SECRET_KEY_ADMIN,
       options : {
             expiresIn: "1y",
             jwtid: jwtId
@@ -124,9 +131,9 @@ class UserService {
       };
 
      confirmEmail =  async (req: Request, res: Response, next: NextFunction) => {
-            const {email, otp} = req.body; 
+            const {email, otp}: confirmEmailType = req.body; 
 
-            const otpValue = await get(otp_key({ email, subject: "Email confirmation" }) )
+            const otpValue = await this._radisService.get(this._radisService.otp_key({ email, subject: EventEnum.confirmEmail }) )
             if (!otpValue){
               throw new AppError("otp expired", 400);
             }
@@ -135,7 +142,7 @@ class UserService {
                 throw new AppError("inValid otp", 400);
               }
             const user = await this._userModel.findOneAndUpdate({
-            filter: { email ,confirmed: {$exists:false}},
+            filter: { email ,confirmed: {$exists:false}, provider:providerEnum.System},
             update: { confirmed: true }
             })
 
@@ -143,12 +150,22 @@ class UserService {
                  throw new AppError("user not exist",400);
               }
             
-              await deleteKey(otp_key({  email, subject: "Email confirmation"  }))
+              await this._radisService.deleteKey(this._radisService.otp_key({  email, subject: EventEnum.confirmEmail}))
             
               res.status(201).json({ message: "email confirmed successfully" });
       };
 
+     getProfile = async (req: IRequest, res: Response, next: NextFunction) => {
 
+            const user = req.user!.toObject() as any;;
+            user.phone = user.phone ? decrypt(user.phone) : null;
+
+            return res.status(200).json({
+            message: "done",
+            data: user
+            });
+
+};
      forgetPassword  =  async (req: Request, res: Response, next: NextFunction) => {
             const { email } = req.body;
             const user = await this._userModel.findOne({filter:  {email,confirmed: { $exists: true }}})
@@ -159,8 +176,8 @@ class UserService {
 
          await sendEmail({to: email, subject: "Forget password", html: emailTemplate(otp)})
 
-         await setValue({
-            key: otp_key({ email, subject: "Forget password" }),
+         await this._radisService.setValue({
+            key: this._radisService.otp_key({ email, subject: EventEnum.forgetPassword}),
             value: Hash({ plainText: `${otp}` }),
             ttl: 60 * 2
             });
@@ -170,7 +187,7 @@ class UserService {
 
       resetPasswordOtp = async (req: Request, res: Response, next: NextFunction) => {
             const { email, otp, newPassword } = req.body;
-            const storedOtp = await get(otp_key({email, subject: "Forget password"}))
+            const storedOtp = await this._radisService.get(this._radisService.otp_key({email, subject: EventEnum.forgetPassword}))
             if (!storedOtp) {
                throw new AppError("OTP expired", 400 );
             }
@@ -183,7 +200,7 @@ class UserService {
                   throw new AppError("user not exist or not confirmed",404);
             }          
               // 2. update password
-              user.password = Hash({ plainText: newPassword });
+              user.password = newPassword;
             
               // (logout from all devices)
               user.changeCredential = new Date();
@@ -191,7 +208,7 @@ class UserService {
               await user.save();
             
               // 3. delete OTP
-              await deleteKey(otp_key({ email, subject: "Forget password" }));
+              await this._radisService.deleteKey(this._radisService.otp_key({ email, subject: EventEnum.forgetPassword }));
             
               return res.status(200).json({
                 message: "Password reset successfully",
@@ -212,7 +229,7 @@ class UserService {
             }
 
             // 2. update password
-            user.password = Hash({ plainText: newPassword });
+            user.password = newPassword;
 
             // 3. logout from all devices
             user.changeCredential = new Date();
@@ -234,7 +251,7 @@ class UserService {
             req.user!.changeCredential = new Date();
             await req.user!.save();
 
-            const userKeys = await keys(get_key({ userId: req.user!._id }));
+            const userKeys = await this._radisService.keys(this._radisService.get_key({ userId: req.user!._id }));
 
             if (userKeys.length) {
             await redisClient.del(userKeys);
@@ -243,8 +260,8 @@ class UserService {
 
      // logout from current device
       else{
-            await setValue({
-                  key: revoke_key({ userId: req.user!._id, jti: req.decoded!.jti }),
+            await this._radisService.setValue({
+                  key: this._radisService.revoke_key({ userId: req.user!._id, jti: req.decoded!.jti }),
                   value: `${req.decoded!.jti}`,
                   ttl: req.decoded!.exp! - Math.floor( Date.now() / 1000)       
             })
@@ -257,7 +274,9 @@ class UserService {
      signUpWithGmail = async (req: Request, res: Response, next: NextFunction) => {
 
        const { idToken } = req.body;
+
         const client = new OAuth2Client();
+
         const ticket = await client.verifyIdToken({
             idToken,
             // client iid
@@ -265,20 +284,16 @@ class UserService {
         });
 
         const payload = ticket.getPayload();
-
-      if (!payload) {
-      throw new AppError("Invalid Google token", 400);
-      }
-
-      const { email, email_verified, name } = payload;
+        console.log(payload)
+      const { email, email_verified, name } = payload as TokenPayload;
 
       if (!email || !email_verified) {
-      throw new AppError("Invalid Google account", 400);
+           throw new AppError("Invalid Google account", 400);
       }
+
         let user = await this._userModel.findOne({
             filter: { email }
         });
-
 
             if (!user) {
             const parts = name?.split(" ") || [];
@@ -292,19 +307,18 @@ class UserService {
             lastName,
             provider: providerEnum.Google
             });
-            console.log(user)
             }
 
             if (user.provider === providerEnum.System) {
             throw new AppError("please log in on system only", 400 );
         }
 
-        const access_token = GenerateToken({
+        const access_token = this._tokenService.GenerateToken({
             payload: {
                 id: user._id,
                 email: user.email
             },
-            secret_key: ACCESS_SECRET_KEY,
+            secret_key: user?.role == RoleEnum.user ? ACCESS_SECRET_KEY_USER : ACCESS_SECRET_KEY_ADMIN,
             options: {
                 expiresIn: "1d",
             }
@@ -317,6 +331,69 @@ class UserService {
         });
 
 };
+   
+
+      resendOtp = async  (req: Request, res: Response, next: NextFunction) => {
+      const { email }: resendOtpSchemaType = req.body
+
+      const user = await this._userModel.findOne({
+      filter: { email, confirmed: { $exists: false }, provider: providerEnum.System },
+      })
+
+      if (!user) {
+      throw new AppError("user not exist or already confirmed");
+      }
+
+      await this.sendEmailOtp({email,subject: EventEnum.confirmEmail});
+      res.status(201).json({ message: "done" });
+
+      }
+
+     sendEmailOtp = async ({ email, subject }: {email:string, subject: EventEnum}) => {
+        const isBlocked = await this._radisService.ttl(this._radisService.block_otp_key( email ));
+
+        if (isBlocked > 0) {
+          throw new AppError(`you blocked please try again after ${isBlocked} seconds`);
+        }
+      
+        const key = this._radisService.otp_key({ email, subject });
+      
+        const ttlOtp = await this._radisService.ttl(key);
+        if (ttlOtp > 0) {
+          throw new AppError(
+            `you already have otp not expired yet please try again after ${ttlOtp} seconds`
+          );
+        }
+      
+        if ((await this._radisService.get( this._radisService.max_otp_key( email ) )) >= 3) {
+          await this._radisService.setValue({
+            key: this._radisService.block_otp_key( email ),
+            value: 1,
+            ttl: 15 * 60,
+          });
+          throw new AppError(`you exceed maximum number of trials`);
+        }
+      
+        const otp = await generateOtp();
+        eventEmitter.emit(EventEnum.confirmEmail, async()=>{
+          await sendEmail({
+              to: email,
+              subject,
+              html: emailTemplate(otp)
+          });
+      
+          await this._radisService.setValue({
+              key,
+              value: Hash({ plainText: `${otp}` }),
+              ttl: 60 * 2,
+          });
+      
+          await this._radisService.incr(this._radisService.max_otp_key( email ));
+          })
+      
+        
+      };
+      
 };
 
 

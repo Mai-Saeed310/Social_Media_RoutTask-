@@ -6,7 +6,7 @@ import { PORT } from './config/config.service';
 import { AppError, globalErrorHandler } from './common/utiliti/global-error-handling';
 import { authRouter } from './modules/auth/user.controller';
 import { checkConncetionDB } from './DB/connectionDB';
-import { redisConnection } from './DB/redis.service';
+import radisService from './common/service/radis.service';
 
 
 
@@ -22,7 +22,7 @@ export const bootstrap = ()=>{
         message:"Too many requests, please try again later."
     });
     checkConncetionDB();
-    redisConnection();
+    radisService.redisConnection();
     app.use(express.json());
     app.use(cors(),helmet(),limiter);
     app.use("/auth",authRouter);
@@ -32,7 +32,7 @@ export const bootstrap = ()=>{
     })
 
 
-    
+
     // Global error handling 
     app.use(globalErrorHandler)
 

@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { AppError } from "../common/utiliti/global-error-handling";
 import { redisClient } from "../DB/redis.service";
+import { EventEnum } from '../common/enum/event.enum';
 
 
 
@@ -13,7 +14,7 @@ export const get_key = ({ userId }:{userId: Types.ObjectId}) => {
     return `revoke_token::${userId}`
 }
 
-export const otp_key = ({ email, subject }:{email: string, subject: string;}) => {
+export const otp_key = ({ email, subject }:{email: string, subject: EventEnum;}) => {
     return `otp::${email}::${subject}`;
 }
 
@@ -73,7 +74,7 @@ export const exists = async (key:string) => {
     }
 }
 
-export const deleteKey = async ( key: string) => {
+export const deleteKey = async ( key: string | string[]) => {
     try {
         if(!key.length){
            return 0 
