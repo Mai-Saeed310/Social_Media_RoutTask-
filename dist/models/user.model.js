@@ -71,6 +71,7 @@ const userSchema = new mongoose_1.default.Schema({
         enum: Object.values(user_enum_1.providerEnum),
         default: user_enum_1.providerEnum.System
     },
+    deletedAt: Date,
 }, {
     timestamps: true,
     strictQuery: true,
@@ -88,6 +89,18 @@ userSchema.virtual("userName")
 userSchema.pre("save", function () {
     if (this.isModified("password") && this.password) {
         this.password = (0, hash_security_1.Hash)({ plainText: this.password });
+    }
+});
+userSchema.pre("findOne", function () {
+    const { paranoid, ...rest } = this.getQuery();
+    if (paranoid === false) {
+        this.setQuery({ ...rest });
+    }
+    else {
+        this.setQuery({
+            ...rest,
+            deletedAt: { $exists: false }
+        });
     }
 });
 exports.userModel = mongoose_1.default.model("userModel", userSchema);

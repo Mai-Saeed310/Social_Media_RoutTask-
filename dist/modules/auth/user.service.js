@@ -19,10 +19,13 @@ const email_events_1 = require("../../common/utiliti/email/email.events");
 const event_enum_1 = require("../../common/enum/event.enum");
 const radis_service_1 = __importDefault(require("../../common/service/radis.service"));
 const token_1 = __importDefault(require("../../common/middlware/token"));
+const S3_service_1 = require("../../common/service/S3.service");
+const promises_1 = require("node:stream/promises");
 class UserService {
     _userModel = new user_repository_1.UserRepository();
     _radisService = radis_service_1.default;
     _tokenService = token_1.default;
+    _S3Service = new S3_service_1.S3Service();
     constructor() { }
     signUp = async (req, res, next) => {
         const { userName, email, password, age, gender, address, phone } = req.body;
@@ -283,6 +286,72 @@ class UserService {
             await this._radisService.incr(this._radisService.max_otp_key(email));
         });
     };
+    uploadFile = async (req, res, next) => {
+        const key = await this._S3Service.uploadFile({
+            file: req.file,
+            path: "users"
+        });
+        return res.status(200).json({ message: "done", key });
+    };
+    uploadLargeFile = async (req, res, next) => {
+        const key = await this._S3Service.uploadLargeFile({
+            file: req.file,
+            path: "users/large"
+        });
+        return res.status(200).json({ message: "done", key });
+    };
+    uploadFiles = async (req, res, next) => {
+        const urls = await this._S3Service.uploadFiles({
+            files: req.files,
+            path: "users/files"
+        });
+        return res.status(200).json({ message: "done", urls: urls });
+    };
+    upload = async (req, res, next) => {
+        const { ContentType, fileName } = req.body;
+        const { url, Key } = await this._S3Service.createPreSignedUrl({
+            fileName,
+            ContentType,
+            path: "users",
+        });
+        return res.status(200).json({ message: "done", data: { Key, url } });
+    };
+    deleteFile = (async (req, res, next) => {
+        const { Key } = req.query;
+        let result = this._S3Service.deleteFile(Key);
+        return res.status(200).json({ message: "done" });
+    });
+    getFile = (async (req, res, next) => {
+        const { path } = req.params;
+        const { download } = req.query;
+        const Key = path.join("/");
+        const result = await this._S3Service.getFile(Key);
+        const stream = result.Body;
+        res.setHeader("Content-Type", result.ContentType);
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        if (download && download === "true") {
+            res.setHeader("Content-Disposition", `attachment; filename="${path.pop()}"`);
+        }
+        await (0, promises_1.pipeline)(stream, res);
+    });
+    getPreSigned = (async (req, res, next) => {
+        const { path } = req.params;
+        const { download } = req.query;
+        const Key = path.join("/");
+        const url = await this._S3Service.getPreSignedUrl({ Key, download: download ? download : undefined });
+        return res.status(200).json({ message: "done", URL: url });
+    });
+    deleteFiles = (async (req, res, next) => {
+        const { Keys } = req.body;
+        console.log({ Keys });
+        let result = await this._S3Service.deleteFiles(Keys);
+        return res.status(200).json({ message: "done", result: result });
+    });
+    deleteFolder = (async (req, res, next) => {
+        const { folderName } = req.body;
+        let result = await new S3_service_1.S3Service().deleteFolder(folderName);
+        return res.status(200).json({ message: "done", data: result });
+    });
 }
 ;
 exports.default = new UserService();

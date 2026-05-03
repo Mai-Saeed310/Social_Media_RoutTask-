@@ -19,6 +19,7 @@ export interface IUser {
     changeCredential?: Date,
     createdAt: Date,
     updatedAt: Date,
+    deletedAt?: Date,
     provider: string
 }
 
@@ -88,6 +89,8 @@ const userSchema = new mongoose.Schema<IUser>({
         enum: Object.values(providerEnum),
         default: providerEnum.System
     },
+    deletedAt: Date,
+    
 
 }, {
   timestamps: true,
@@ -118,7 +121,19 @@ userSchema.pre("save", function () {
 
 });
 
+// soft delete
+userSchema.pre("findOne", function () {
+  const { paranoid, ...rest } = this.getQuery();
 
+  if (paranoid === false) {
+    this.setQuery({ ...rest });
+  } else {
+    this.setQuery({ 
+      ...rest, 
+      deletedAt: { $exists: false } 
+    });
+  }
+});
 
 // create model
 export const userModel = mongoose.model<IUser>("userModel", userSchema);

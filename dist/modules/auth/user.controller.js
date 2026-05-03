@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authRouter = void 0;
+const multer_enum_1 = require("./../../common/enum/multer.enum");
 const express_1 = require("express");
 const user_service_1 = __importDefault(require("./user.service"));
 const validation_1 = require("../../common/middlware/validation");
@@ -44,6 +45,7 @@ const UV = __importStar(require("./user.validation"));
 const authentication_1 = require("../../common/middlware/authentication");
 const authorization_1 = require("../../common/middlware/authorization");
 const user_enum_1 = require("../../common/enum/user.enum");
+const multer_cloud_1 = __importDefault(require("../../common/middlware/multer.cloud"));
 exports.authRouter = (0, express_1.Router)();
 exports.authRouter.post("/sign-up", (0, validation_1.Validation)(UV.signUpSchema), user_service_1.default.signUp);
 exports.authRouter.post("/sign-in", (0, validation_1.Validation)(UV.signInSchema), user_service_1.default.signIn);
@@ -55,3 +57,12 @@ exports.authRouter.post("/logOut", authentication_1.authentication, user_service
 exports.authRouter.post("/signup/gmail", user_service_1.default.signUpWithGmail);
 exports.authRouter.post("/resend-otp", (0, validation_1.Validation)(UV.resendOtpSchema), user_service_1.default.resendOtp);
 exports.authRouter.get("/profile", authentication_1.authentication, (0, authorization_1.authorization)([user_enum_1.RoleEnum.user]), user_service_1.default.getProfile);
+exports.authRouter.post("/upload", (0, multer_cloud_1.default)({}).single("attachment"), user_service_1.default.uploadFile);
+exports.authRouter.post("/upload-large", authentication_1.authentication, (0, multer_cloud_1.default)({ store_type: multer_enum_1.store_enum.disk }).single("attachment"), user_service_1.default.uploadLargeFile);
+exports.authRouter.post("/upload-files", authentication_1.authentication, (0, multer_cloud_1.default)({ store_type: multer_enum_1.store_enum.memory }).array("attachments"), user_service_1.default.uploadFiles);
+exports.authRouter.post("/upload-url", user_service_1.default.upload);
+exports.authRouter.get("/get-file/*path", user_service_1.default.getFile);
+exports.authRouter.get("/pre-signed/*path", user_service_1.default.getPreSigned);
+exports.authRouter.delete("/delete", user_service_1.default.deleteFile);
+exports.authRouter.delete("/deleteFiles", user_service_1.default.deleteFiles);
+exports.authRouter.delete("/deleteFolder", user_service_1.default.deleteFolder);

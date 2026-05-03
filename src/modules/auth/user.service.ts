@@ -19,6 +19,8 @@ import { eventEmitter } from "../../common/utiliti/email/email.events";
 import { EventEnum } from "../../common/enum/event.enum";
 import radisService from "../../common/service/radis.service";
 import tokenService from "../../common/middlware/token";
+import { S3Service } from '../../common/service/S3.service';
+import { pipeline } from 'node:stream/promises';
 
 
 
@@ -26,9 +28,11 @@ class UserService {
     private readonly _userModel = new UserRepository();
     private readonly _radisService =  radisService;
     private readonly _tokenService = tokenService;
+    private readonly _S3Service = new S3Service();
 
 
     constructor(){}
+
      signUp =  async (req: Request, res: Response, next: NextFunction)  => {
         const { userName, email, password, age, gender, address, phone }: signUpType = req.body ; 
         const UserExist = await this._userModel.findOne({filter: {email}})
@@ -333,7 +337,7 @@ class UserService {
 };
    
 
-      resendOtp = async  (req: Request, res: Response, next: NextFunction) => {
+    resendOtp = async  (req: Request, res: Response, next: NextFunction) => {
       const { email }: resendOtpSchemaType = req.body
 
       const user = await this._userModel.findOne({
@@ -392,9 +396,116 @@ class UserService {
           })
       
         
+      }; 
+
+    uploadFile = async (req: Request, res: Response, next: NextFunction) => {
+       const key = await this._S3Service.uploadFile({
+        file: req.file!, 
+        path: "users"
+
+       })
+            return res.status(200).json({message: "done",key});
+        
       };
-      
+  
+    uploadLargeFile = async (req: Request, res: Response, next: NextFunction) => {
+       const key = await this._S3Service.uploadLargeFile({
+        file: req.file!, 
+        path: "users/large"
+
+       })
+            return res.status(200).json({message: "done",key});
+        
+      };
+
+    uploadFiles = async (req: Request, res: Response, next: NextFunction) => {
+       const urls = await this._S3Service.uploadFiles({
+        files: req.files as Express.Multer.File[], 
+        path: "users/files"
+
+       })
+            return res.status(200).json({message: "done",urls: urls});
+        
+      };
+
+    upload = async (req: Request, res: Response, next: NextFunction) => {
+
+      const { ContentType, fileName } = req.body
+
+      const { url, Key } = await this._S3Service.createPreSignedUrl({
+        fileName,
+        ContentType,
+        path: "users",
+      })
+
+      return res.status(200).json({ message: "done" , data: { Key, url } });
+
+    }
+
+    deleteFile = ( async (req: Request, res: Response, next: NextFunction) => {
+
+      const { Key } = req.query as { Key: string }
+
+      let result = this._S3Service.deleteFile(Key)
+      return res.status(200).json({ message: "done"});
+
+})
+
+
+
+    getFile =  (async (req: Request, res: Response, next: NextFunction) => {
+
+        const { path } = req.params as { path: string[] }
+        const { download } = req.query
+        const Key = path.join("/") as string
+
+        const result = await this._S3Service.getFile(Key)
+        const stream = result.Body as NodeJS.ReadableStream
+
+        res.setHeader("Content-Type", result.ContentType!)
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin")
+
+        if (download && download === "true") {
+            res.setHeader("Content-Disposition", `attachment; filename="${path.pop()}"`);
+        }
+
+        await pipeline(stream, res)
+
+    })
+
+
+    getPreSigned = (async (req: Request, res: Response, next: NextFunction) => {
+
+    const { path } = req.params as { path: string[] }
+    const { download } = req.query as { download: string }
+    const Key = path.join("/") as string
+
+    const url = await this._S3Service.getPreSignedUrl({ Key, download: download ? download : undefined })
+
+    return res.status(200).json({ message: "done" , URL: url  });
+
+    })
+
+    deleteFiles = (async (req: Request, res: Response, next: NextFunction) => {
+
+      const { Keys } = req.body as { Keys: string[] }
+      console.log({ Keys });
+
+      let result = await this._S3Service.deleteFiles(Keys)
+
+      return res.status(200).json({ message: "done" , result: result  });
+
+})
+    deleteFolder = ( async (req: Request, res: Response, next: NextFunction) => {
+
+      const { folderName } = req.body as { folderName: string }
+
+      let result = await new S3Service().deleteFolder(folderName)
+     return res.status(200).json({ message: "done" , data: result  });
+
+    })
 };
+
 
 
 export default new UserService();

@@ -31,3 +31,7 @@ export const REFRESH_SECRET_KEY_ADMIN: string = process.env.REFRESH_SECRET_KEY_A
 
 export const CLIENT_ID: string = process.env.CLIENT_ID!
 
+export const AWS_REGION: string = process.env.AWS_REGION!
+export const AWS_BUCKET_NAME: string = process.env.AWS_BUCKET_NAME!
+export const AWS_ACCESS_SECRET_KEY: string = process.env.AWS_ACCESS_SECRET_KEY!
+export const AWS_ACCESS_KEY: string = process.env.AWS_ACCESS_KEY!
