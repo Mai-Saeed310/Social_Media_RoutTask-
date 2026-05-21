@@ -1,6 +1,7 @@
 import mongoose, { Types } from "mongoose";
 import { GenderEnum, providerEnum, RoleEnum } from "../common/enum/user.enum";
 import { Hash } from "../common/utiliti/security/hash.security";
+import { string } from "zod/mini";
 
 
 
@@ -20,7 +21,9 @@ export interface IUser {
     createdAt: Date,
     updatedAt: Date,
     deletedAt?: Date,
-    provider: string
+    provider: string,
+    profilePic?: string,
+    friends: Types.ObjectId[]
 }
 
 
@@ -90,7 +93,8 @@ const userSchema = new mongoose.Schema<IUser>({
         default: providerEnum.System
     },
     deletedAt: Date,
-    
+    profilePic: string,
+    friends: [{type: Types.ObjectId, ref: "userModel"}]
 
 }, {
   timestamps: true,

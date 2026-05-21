@@ -35,9 +35,11 @@ authRouter.post("/upload-large",authentication,multerCloud({store_type: store_en
 
 authRouter.post("/upload-files",authentication,multerCloud({store_type: store_enum.memory}).array("attachments"),UserService.uploadFiles);
 
-authRouter.post("/upload-url",UserService.upload);
+authRouter.post("/upload-url",authentication,UserService.uploadUrl);
 
 authRouter.get("/get-file/*path",UserService.getFile);
+authRouter.get("/get-files",UserService.getFiles);
+
 authRouter.get("/pre-signed/*path",UserService.getPreSigned);
 
 authRouter.delete("/delete",UserService.deleteFile);

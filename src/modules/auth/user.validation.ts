@@ -18,6 +18,7 @@ export const signInSchema = {
     body:z.object({
     email: z.string().email(),
     password: z.string().min(6),
+    fcm: z.string()
   })
   }
 

@@ -34,7 +34,6 @@ class S3Service {
         if (!command.input.Key) {
             throw new global_error_handling_1.AppError("fail to upload file");
         }
-        console.log(command);
         await this.client.send(command);
         return command.input.Key;
     }

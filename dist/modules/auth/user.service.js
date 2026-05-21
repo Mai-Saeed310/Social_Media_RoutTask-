@@ -21,11 +21,13 @@ const radis_service_1 = __importDefault(require("../../common/service/radis.serv
 const token_1 = __importDefault(require("../../common/middlware/token"));
 const S3_service_1 = require("../../common/service/S3.service");
 const promises_1 = require("node:stream/promises");
+const notification_service_1 = __importDefault(require("../../common/service/notification.service"));
 class UserService {
     _userModel = new user_repository_1.UserRepository();
     _radisService = radis_service_1.default;
     _tokenService = token_1.default;
     _S3Service = new S3_service_1.S3Service();
+    _notificationServie = notification_service_1.default;
     constructor() { }
     signUp = async (req, res, next) => {
         const { userName, email, password, age, gender, address, phone } = req.body;
@@ -51,7 +53,7 @@ class UserService {
         res.status(201).json({ message: "done", data: user });
     };
     signIn = async (req, res, next) => {
-        const { email, password } = req.body;
+        const { email, password, fcm } = req.body;
         const user = await this._userModel.findOne({ filter: { email, confirmed: { $exists: true }, provider: user_enum_2.providerEnum.System } });
         if (!user) {
             throw new global_error_handling_1.AppError("User does not found", 404);
@@ -93,6 +95,16 @@ class UserService {
                 jwtid: jwtId
             }
         });
+        if (fcm) {
+            await this._radisService.addFCM({ userId: user._id, FCMToken: fcm });
+            const tokens = await this._radisService.getFCMs(user._id);
+            await this._notificationServie.sendNotifications({
+                tokens, data: {
+                    title: `Hi ${user.firstName}`,
+                    body: `new login at ${new Date()}`
+                }
+            });
+        }
         return res.status(200).json({
             message: "done",
             access_token: access_token,
@@ -307,20 +319,22 @@ class UserService {
         });
         return res.status(200).json({ message: "done", urls: urls });
     };
-    upload = async (req, res, next) => {
+    uploadUrl = async (req, res, next) => {
         const { ContentType, fileName } = req.body;
         const { url, Key } = await this._S3Service.createPreSignedUrl({
             fileName,
             ContentType,
             path: "users",
         });
+        if (!req.user?._id) {
+            throw new global_error_handling_1.AppError("User not found", 404);
+        }
+        const updatedUser = await this._userModel.findOneAndUpdate({
+            filter: { _id: req.user._id },
+            update: { profilePic: Key }
+        });
         return res.status(200).json({ message: "done", data: { Key, url } });
     };
-    deleteFile = (async (req, res, next) => {
-        const { Key } = req.query;
-        let result = this._S3Service.deleteFile(Key);
-        return res.status(200).json({ message: "done" });
-    });
     getFile = (async (req, res, next) => {
         const { path } = req.params;
         const { download } = req.query;
@@ -334,12 +348,25 @@ class UserService {
         }
         await (0, promises_1.pipeline)(stream, res);
     });
+    getFiles = (async (req, res, next) => {
+        const { folderName } = req.query;
+        const result = await this._S3Service.getFiles(folderName);
+        return res.status(200).json({ message: "done", data: result });
+    });
     getPreSigned = (async (req, res, next) => {
         const { path } = req.params;
         const { download } = req.query;
         const Key = path.join("/");
         const url = await this._S3Service.getPreSignedUrl({ Key, download: download ? download : undefined });
         return res.status(200).json({ message: "done", URL: url });
+    });
+    deleteFile = (async (req, res, next) => {
+        const { Key } = req.query;
+        if (!Key) {
+            throw new global_error_handling_1.AppError("Key is required", 400);
+        }
+        let result = await this._S3Service.deleteFile(Key);
+        return res.status(200).json({ message: "done" });
     });
     deleteFiles = (async (req, res, next) => {
         const { Keys } = req.body;

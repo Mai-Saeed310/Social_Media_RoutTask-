@@ -60,8 +60,9 @@ exports.authRouter.get("/profile", authentication_1.authentication, (0, authoriz
 exports.authRouter.post("/upload", (0, multer_cloud_1.default)({}).single("attachment"), user_service_1.default.uploadFile);
 exports.authRouter.post("/upload-large", authentication_1.authentication, (0, multer_cloud_1.default)({ store_type: multer_enum_1.store_enum.disk }).single("attachment"), user_service_1.default.uploadLargeFile);
 exports.authRouter.post("/upload-files", authentication_1.authentication, (0, multer_cloud_1.default)({ store_type: multer_enum_1.store_enum.memory }).array("attachments"), user_service_1.default.uploadFiles);
-exports.authRouter.post("/upload-url", user_service_1.default.upload);
+exports.authRouter.post("/upload-url", authentication_1.authentication, user_service_1.default.uploadUrl);
 exports.authRouter.get("/get-file/*path", user_service_1.default.getFile);
+exports.authRouter.get("/get-files", user_service_1.default.getFiles);
 exports.authRouter.get("/pre-signed/*path", user_service_1.default.getPreSigned);
 exports.authRouter.delete("/delete", user_service_1.default.deleteFile);
 exports.authRouter.delete("/deleteFiles", user_service_1.default.deleteFiles);

@@ -43,7 +43,6 @@ export class S3Service {
     if (!command.input.Key){
       throw new AppError("fail to upload file")
     }
-console.log (command)
     await this.client.send(command)
     return command.input.Key
 

@@ -1,5 +1,4 @@
-import { PopulateOptions, ProjectionType, QueryOptions, UpdateQuery } from "mongoose";
-import { HydratedDocument, Model, QueryFilter, Types } from "mongoose";
+import { Model } from "mongoose";
 import { IUser, userModel } from "../../models/user.model";
 import { BaseRepository } from "./base.repository";
 

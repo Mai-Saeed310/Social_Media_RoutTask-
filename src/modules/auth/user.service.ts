@@ -21,6 +21,7 @@ import radisService from "../../common/service/radis.service";
 import tokenService from "../../common/middlware/token";
 import { S3Service } from '../../common/service/S3.service';
 import { pipeline } from 'node:stream/promises';
+import notificationService from '../../common/service/notification.service';
 
 
 
@@ -29,6 +30,7 @@ class UserService {
     private readonly _radisService =  radisService;
     private readonly _tokenService = tokenService;
     private readonly _S3Service = new S3Service();
+    private readonly _notificationServie = notificationService;
 
 
     constructor(){}
@@ -63,7 +65,7 @@ class UserService {
 
      signIn =  async (req: Request, res: Response, next: NextFunction) => {
 
-      const {email, password}: signInSchemaType = req.body; 
+      const {email, password, fcm}: signInSchemaType = req.body; 
       const user = await this._userModel.findOne({filter: {email,confirmed: { $exists: true }, provider: providerEnum.System} } )
       if(!user){
             throw new AppError("User does not found", 404)
@@ -123,6 +125,21 @@ class UserService {
             jwtid: jwtId
       }
       }); 
+
+      if (fcm) {
+          await this._radisService.addFCM({ userId: user._id, FCMToken: fcm })
+          const tokens = await this._radisService.getFCMs(user._id)
+
+          await this._notificationServie.sendNotifications({
+            tokens, data: {
+              title: `Hi ${user.firstName}`,
+              body: `new login at ${new Date()}`
+            }
+          })
+        }
+
+
+
 
     // 4. Success response
     return res.status(200).json({
@@ -428,7 +445,7 @@ class UserService {
         
       };
 
-    upload = async (req: Request, res: Response, next: NextFunction) => {
+    uploadUrl = async (req: IRequest, res: Response, next: NextFunction) => {
 
       const { ContentType, fileName } = req.body
 
@@ -438,20 +455,18 @@ class UserService {
         path: "users",
       })
 
+      if (!req.user?._id) {
+        throw new AppError("User not found", 404);
+      }
+
+    const updatedUser = await this._userModel.findOneAndUpdate({
+      filter: { _id: req.user._id },
+      update: { profilePic: Key }
+    });
+
       return res.status(200).json({ message: "done" , data: { Key, url } });
 
     }
-
-    deleteFile = ( async (req: Request, res: Response, next: NextFunction) => {
-
-      const { Key } = req.query as { Key: string }
-
-      let result = this._S3Service.deleteFile(Key)
-      return res.status(200).json({ message: "done"});
-
-})
-
-
 
     getFile =  (async (req: Request, res: Response, next: NextFunction) => {
 
@@ -473,6 +488,15 @@ class UserService {
 
     })
 
+    getFiles =  (async (req: Request, res: Response, next: NextFunction) => {
+
+        const { folderName } = req.query as { folderName: string }
+
+        const result = await this._S3Service.getFiles(folderName)
+        return res.status(200).json({ message: "done" , data: result});
+
+
+    })
 
     getPreSigned = (async (req: Request, res: Response, next: NextFunction) => {
 
@@ -486,6 +510,18 @@ class UserService {
 
     })
 
+    deleteFile = ( async (req: Request, res: Response, next: NextFunction) => {
+
+      const { Key } = req.query as { Key: string }
+      
+      if (!Key) {
+        throw new AppError("Key is required", 400);
+      }
+      let result = await this._S3Service.deleteFile(Key)
+      return res.status(200).json({ message: "done"});
+
+})
+
     deleteFiles = (async (req: Request, res: Response, next: NextFunction) => {
 
       const { Keys } = req.body as { Keys: string[] }
@@ -496,6 +532,7 @@ class UserService {
       return res.status(200).json({ message: "done" , result: result  });
 
 })
+
     deleteFolder = ( async (req: Request, res: Response, next: NextFunction) => {
 
       const { folderName } = req.body as { folderName: string }
