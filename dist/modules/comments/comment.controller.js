@@ -46,4 +46,3 @@ const CV = __importStar(require("./comment.validation"));
 const validation_1 = require("../../common/middlware/validation");
 exports.commentRouter = (0, express_1.Router)({ mergeParams: true });
 exports.commentRouter.post("/create", authentication_1.authentication, (0, multer_cloud_1.default)({ store_type: multer_enum_1.store_enum.memory }).array("attachments"), (0, validation_1.Validation)(CV.createcommentSchema), comments_service_1.default.createComment);
-exports.commentRouter.post("/:commentId/reply", authentication_1.authentication, (0, multer_cloud_1.default)({ store_type: multer_enum_1.store_enum.memory }).array("attachments"), comments_service_1.default.reply);

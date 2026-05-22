@@ -19,8 +19,8 @@ commentRouter.post("/create",
     commentService.createComment)
 
 
-commentRouter.post("/:commentId/reply",
-    authentication,
-    multerCloud({ store_type: store_enum.memory }).array("attachments"),
-    // Validation(CV.createcommentSchema),
-    commentService.reply)
+// commentRouter.post("/:commentId/reply",
+//     authentication,
+//     multerCloud({ store_type: store_enum.memory }).array("attachments"),
+//     // Validation(CV.createcommentSchema),
+//     commentService.reply)

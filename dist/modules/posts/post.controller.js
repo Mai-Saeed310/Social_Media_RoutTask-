@@ -46,7 +46,7 @@ const PV = __importStar(require("./post.validation"));
 const validation_1 = require("../../common/middlware/validation");
 const comment_controller_1 = require("../comments/comment.controller");
 exports.postRouter = (0, express_1.Router)();
-exports.postRouter.use("/:postId/comment", comment_controller_1.commentRouter);
+exports.postRouter.use("/:postId/comment{/:commentId/reply}", comment_controller_1.commentRouter);
 exports.postRouter.post("/create", authentication_1.authentication, (0, multer_cloud_1.default)({ store_type: multer_enum_1.store_enum.memory }).array("attachments"), (0, validation_1.Validation)(PV.createPostSchema), post_service_1.default.createPost);
 exports.postRouter.get("/get", authentication_1.authentication, post_service_1.default.getPosts);
 exports.postRouter.get("/get-paginate", authentication_1.authentication, post_service_1.default.getPaginate);

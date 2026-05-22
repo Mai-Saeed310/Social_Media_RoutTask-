@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.commentModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
+const post_enum_1 = require("../common/enum/post.enum");
 const CommentSchema = new mongoose_1.default.Schema({
     content: {
         type: String, min: 1, required: function () {
@@ -46,8 +47,8 @@ const CommentSchema = new mongoose_1.default.Schema({
     likes: [{ type: mongoose_1.Types.ObjectId, ref: "userModel" }],
     tags: [{ type: mongoose_1.Types.ObjectId, ref: "userModel" }],
     createdBy: { type: mongoose_1.Types.ObjectId, ref: "userModel", required: true },
-    postId: { type: mongoose_1.Types.ObjectId, ref: "postModel", required: true },
-    replyId: { type: mongoose_1.Types.ObjectId, ref: "commentModel" },
+    refId: { type: mongoose_1.Types.ObjectId, refPath: "onModel", required: true },
+    onModel: { type: String, enum: post_enum_1.On_Model_Enum, required: true }
 }, {
     timestamps: true,
     toJSON: { virtuals: true },

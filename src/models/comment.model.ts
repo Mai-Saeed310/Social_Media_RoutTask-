@@ -1,5 +1,5 @@
 import mongoose, { Types } from "mongoose"
-import { Allow_Comment_Enum, Availability_Enum } from "../common/enum/post.enum"
+import { Allow_Comment_Enum, Availability_Enum, On_Model_Enum } from "../common/enum/post.enum"
 
 
 
@@ -10,8 +10,8 @@ content?: string,
     likes?: Types.ObjectId[],
     tags?: Types.ObjectId[],
     createdBy: Types.ObjectId,
-    postId: Types.ObjectId,
-    replyId?: Types.ObjectId,
+    refId: Types.ObjectId,
+    onModel: On_Model_Enum,
 
 }
 
@@ -27,8 +27,8 @@ content: {
     likes: [{ type: Types.ObjectId, ref: "userModel" }],
     tags: [{ type: Types.ObjectId, ref: "userModel" }],
     createdBy: { type: Types.ObjectId, ref: "userModel", required: true },
-    postId: { type: Types.ObjectId, ref: "postModel", required: true },
-    replyId: { type: Types.ObjectId, ref: "commentModel" },
+    refId: { type: Types.ObjectId, refPath: "onModel", required: true }, // commentId or postId
+    onModel: { type: String, enum: On_Model_Enum, required: true } // Post or Comment
 
 }, {
     timestamps: true,
